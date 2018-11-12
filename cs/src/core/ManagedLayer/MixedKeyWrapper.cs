@@ -1,6 +1,8 @@
 ﻿// Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT license.
 
+#pragma warning disable 1591
+
 //#define BLIT_KEY
 using System;
 using System.IO;
@@ -46,17 +48,17 @@ namespace FASTER.core
 
         public static void Serialize(MixedKeyWrapper* key, Stream toStream)
         {
-            throw new NotImplementedException();
+            throw new InvalidOperationException();
         }
 
         public static void Deserialize(MixedKeyWrapper* key, Stream fromStream)
         {
-            throw new NotImplementedException();
+            throw new InvalidOperationException();
         }
 
         public static void Free(MixedKeyWrapper* key)
         {
-            throw new NotImplementedException();
+            throw new InvalidOperationException();
         }
 
     #endregion
@@ -87,7 +89,7 @@ namespace FASTER.core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int GetLength(MixedKeyWrapper* key)
         {
-            return sizeof(void*);
+            return BlittableTypeWrapper.kSize;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

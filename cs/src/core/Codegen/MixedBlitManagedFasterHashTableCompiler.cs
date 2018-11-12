@@ -48,7 +48,7 @@ namespace FASTER.core.Roslyn
         /// 
         /// </summary>
         /// <returns>The generated type (to be instantiated). If null, then the error messages giving the reason for failing to generate the type.</returns>
-        public static Tuple<Type, string> GenerateGenericFasterHashTableClass(long size, IDevice logDevice, bool treatValueAsAtomic, bool persistGeneratedCode, bool optimizeCode)
+        public static Tuple<Type, string> GenerateGenericFasterHashTableClass(bool treatValueAsAtomic, bool persistGeneratedCode, bool optimizeCode)
         {
             var c = new MixedBlitManagedFasterHashTableCompiler<TKey, TValue, TInput, TOutput, TContext, TFunctions>(treatValueAsAtomic);
             c.Run(persistGeneratedCode, optimizeCode);
@@ -59,7 +59,6 @@ namespace FASTER.core.Roslyn
             if (a == null)
             {
                 string error = "Errors during code-gen compilation: \n" + t.Item2;
-                Console.WriteLine(error);
                 throw new Exception(error);
             }
 
@@ -169,23 +168,27 @@ namespace FASTER.core.Roslyn
 
             var d = new Dictionary<string, IDictionary<ISymbol, SyntaxNode>>();
 
-            var userDictionary = new Dictionary<ISymbol, SyntaxNode>();
-            userDictionary.Add(FindSymbol("MixedKey"), SyntaxFactory.ParseTypeName(userKeyTypeName));
-            userDictionary.Add(FindSymbol("MixedValue"), SyntaxFactory.ParseTypeName(userValueTypeName));
-            userDictionary.Add(FindSymbol("MixedInput"), SyntaxFactory.ParseTypeName(userInputTypeName));
-            userDictionary.Add(FindSymbol("MixedOutput"), SyntaxFactory.ParseTypeName(userOutputTypeName));
-            userDictionary.Add(FindSymbol("MixedContext"), SyntaxFactory.ParseTypeName(userContextTypeName));
-            userDictionary.Add(FindSymbol("MixedUserFunctions"), SyntaxFactory.ParseTypeName(this.typeMapper.CSharpNameFor(typeof(TFunctions))));
+            var userDictionary = new Dictionary<ISymbol, SyntaxNode>
+            {
+                { FindSymbol("MixedKey"), SyntaxFactory.ParseTypeName(userKeyTypeName) },
+                { FindSymbol("MixedValue"), SyntaxFactory.ParseTypeName(userValueTypeName) },
+                { FindSymbol("MixedInput"), SyntaxFactory.ParseTypeName(userInputTypeName) },
+                { FindSymbol("MixedOutput"), SyntaxFactory.ParseTypeName(userOutputTypeName) },
+                { FindSymbol("MixedContext"), SyntaxFactory.ParseTypeName(userContextTypeName) },
+                { FindSymbol("MixedUserFunctions"), SyntaxFactory.ParseTypeName(this.typeMapper.CSharpNameFor(typeof(TFunctions))) }
+            };
 
             d.Add("user", userDictionary);
 
-            var internalDictionary = new Dictionary<ISymbol, SyntaxNode>();
-            internalDictionary.Add(FindSymbol("MixedKey"), SyntaxFactory.ParseTypeName(internalKeyTypeName));
-            internalDictionary.Add(FindSymbol("MixedValue"), SyntaxFactory.ParseTypeName(internalValueTypeName));
-            internalDictionary.Add(FindSymbol("MixedInput"), SyntaxFactory.ParseTypeName(internalInputTypeName));
-            internalDictionary.Add(FindSymbol("MixedOutput"), SyntaxFactory.ParseTypeName(internalOutputTypeName));
-            internalDictionary.Add(FindSymbol("MixedContext"), SyntaxFactory.ParseTypeName(internalContextTypeName));
-            internalDictionary.Add(FindSymbol("MixedUserFunctions"), SyntaxFactory.ParseTypeName(this.typeMapper.CSharpNameFor(typeof(TFunctions))));
+            var internalDictionary = new Dictionary<ISymbol, SyntaxNode>
+            {
+                { FindSymbol("MixedKey"), SyntaxFactory.ParseTypeName(internalKeyTypeName) },
+                { FindSymbol("MixedValue"), SyntaxFactory.ParseTypeName(internalValueTypeName) },
+                { FindSymbol("MixedInput"), SyntaxFactory.ParseTypeName(internalInputTypeName) },
+                { FindSymbol("MixedOutput"), SyntaxFactory.ParseTypeName(internalOutputTypeName) },
+                { FindSymbol("MixedContext"), SyntaxFactory.ParseTypeName(internalContextTypeName) },
+                { FindSymbol("MixedUserFunctions"), SyntaxFactory.ParseTypeName(this.typeMapper.CSharpNameFor(typeof(TFunctions))) }
+            };
 
             d.Add("internal", internalDictionary);
 
@@ -249,7 +252,7 @@ namespace FASTER.core.Roslyn
         {
             return
                 $"public unsafe struct {internalTypeName} {{\r\n" +
-                $"   public fixed byte fixedBuffer[{TypeSize.GetSize(default(T))}];" +
+                $"   public fixed byte fixedBuffer[{Helper.GetSize(default(T))}];" +
                 $"}}\r\n"
                 ;
         }

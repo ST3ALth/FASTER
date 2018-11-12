@@ -14,7 +14,7 @@ using System.Threading;
 
 namespace FASTER.core
 {
-    public unsafe partial class FasterKV : FASTERBase, IFASTER
+    public unsafe partial class FasterKV : FasterBase, IFasterKV
     {
         enum LatchOperation : byte
         {
@@ -56,7 +56,7 @@ namespace FASTER.core
         /// </list>
         /// </returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        protected OperationStatus InternalRead(
+        internal OperationStatus InternalRead(
                                     Key* key, 
                                     Input* input, 
                                     Output* output, 
@@ -208,7 +208,7 @@ namespace FASTER.core
         ///     </item>
         /// </list>
         /// </returns>
-        protected OperationStatus InternalContinuePendingRead(
+        internal OperationStatus InternalContinuePendingRead(
                             ExecutionContext ctx,
                             AsyncIOContext request,
                             ref PendingContext pendingContext)
@@ -229,6 +229,8 @@ namespace FASTER.core
                     InternalContinuePendingReadCopyToTail(ctx, request, ref pendingContext);
                 }
             }
+            else
+                return OperationStatus.NOTFOUND;
 
             return OperationStatus.SUCCESS;
         }
@@ -239,7 +241,7 @@ namespace FASTER.core
         /// <param name="ctx"> The thread(or session) context to execute operation in.</param>
         /// <param name="request">Async response from disk.</param>
         /// <param name="pendingContext">Pending context corresponding to operation.</param>
-        protected void InternalContinuePendingReadCopyToTail(
+        internal void InternalContinuePendingReadCopyToTail(
                                     ExecutionContext ctx,
                                     AsyncIOContext request,
                                     ref PendingContext pendingContext)
@@ -346,7 +348,7 @@ namespace FASTER.core
         /// </list>
         /// </returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        protected OperationStatus InternalUpsert(
+        internal OperationStatus InternalUpsert(
                             Key* key, Value* value,
                             Context* userContext,
                             ref PendingContext pendingContext)
@@ -604,7 +606,7 @@ namespace FASTER.core
         /// </list>
         /// </returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        protected OperationStatus InternalRMW(
+        internal OperationStatus InternalRMW(
                                    Key* key, Input* input,
                                    Context* userContext,
                                    ref PendingContext pendingContext)
@@ -905,7 +907,7 @@ namespace FASTER.core
         ///     </item>
         /// </list>
         /// </returns>
-        protected OperationStatus InternalRetryPendingRMW(
+        internal OperationStatus InternalRetryPendingRMW(
                             ExecutionContext ctx,
                             ref PendingContext pendingContext)
         {
@@ -1169,7 +1171,7 @@ namespace FASTER.core
         ///     </item>
         /// </list>
         /// </returns>
-        protected OperationStatus InternalContinuePendingRMW(
+        internal OperationStatus InternalContinuePendingRMW(
                                     ExecutionContext ctx,
                                     AsyncIOContext request,
                                     ref PendingContext pendingContext)
@@ -1298,7 +1300,7 @@ namespace FASTER.core
         /// </list>
         /// </returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        protected Status HandleOperationStatus(
+        internal Status HandleOperationStatus(
                     ExecutionContext ctx,
                     PendingContext pendingContext,
                     OperationStatus status)
@@ -1379,7 +1381,7 @@ namespace FASTER.core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        protected void AcquireSharedLatch(Key* key)
+        private void AcquireSharedLatch(Key* key)
         {
             var bucket = default(HashBucket*);
             var slot = default(int);
@@ -1391,7 +1393,7 @@ namespace FASTER.core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        protected void ReleaseSharedLatch(Key* key)
+        private void ReleaseSharedLatch(Key* key)
         {
             var bucket = default(HashBucket*);
             var slot = default(int);
@@ -1402,7 +1404,7 @@ namespace FASTER.core
             HashBucket.ReleaseSharedLatch(bucket);
         }
 
-        protected void HeavyEnter(long hash)
+        private void HeavyEnter(long hash)
         {
             if (threadCtx.phase == Phase.GC)
                 GarbageCollectBuckets(hash);
@@ -1421,7 +1423,7 @@ namespace FASTER.core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        protected void BlockAllocate(int recordSize, out long logicalAddress)
+        private void BlockAllocate(int recordSize, out long logicalAddress)
         {
             logicalAddress = hlog.Allocate(recordSize);
             if (logicalAddress >= 0) return;
@@ -1440,13 +1442,13 @@ namespace FASTER.core
 
             if (logicalAddress < hlog.ReadOnlyAddress)
             {
-                Console.WriteLine("Allocated address is read-only, retrying");
+                Debug.WriteLine("Allocated address is read-only, retrying");
                 BlockAllocate(recordSize, out logicalAddress);
             }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        protected bool TraceBackForKeyMatch(
+        private bool TraceBackForKeyMatch(
                                     Key* key,
                                     long fromLogicalAddress,
                                     long minOffset,
@@ -1474,10 +1476,10 @@ namespace FASTER.core
         #endregion
 
         #region Garbage Collection
-        protected internal long[] gcStatus;
-        protected long numPendingChunksToBeGCed;
+        private long[] gcStatus;
+        private long numPendingChunksToBeGCed;
 
-        protected void GarbageCollectBuckets(long hash, bool force = false)
+        private void GarbageCollectBuckets(long hash, bool force = false)
         {
             if (numPendingChunksToBeGCed == 0) return;
 
@@ -1514,6 +1516,8 @@ namespace FASTER.core
                     }
                     if (!force)
                         break;
+
+                    InternalRefresh();
                 }
             }
         }
@@ -1545,7 +1549,7 @@ namespace FASTER.core
         #endregion
 
         #region Split Index
-        protected void SplitBuckets(long hash)
+        private void SplitBuckets(long hash)
         {
             long masked_bucket_index = hash & state[1 - resizeInfo.version].size_mask;
             int offset = (int)(masked_bucket_index >> Constants.kSizeofChunkBits);
@@ -1594,7 +1598,7 @@ namespace FASTER.core
 
         }
 
-        protected void SplitChunk(
+        private void SplitChunk(
                     HashBucket* _src_start,
                     HashBucket* _dest_start0,
                     HashBucket* _dest_start1,

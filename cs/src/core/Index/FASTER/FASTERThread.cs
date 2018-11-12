@@ -11,7 +11,7 @@ using System.Threading;
 
 namespace FASTER.core
 {
-    public unsafe partial class FasterKV : FASTERBase, IFASTER
+    public unsafe partial class FasterKV : FasterBase, IFasterKV
     {
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -29,7 +29,7 @@ namespace FASTER.core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        protected long InternalContinue(Guid guid)
+        internal long InternalContinue(Guid guid)
         {
             if (_hybridLogCheckpoint.info.continueTokens != null)
             {
@@ -39,8 +39,7 @@ namespace FASTER.core
                 }
             }
 
-            Console.WriteLine("Cannot continue!");
-            Debug.Assert(false);
+            Debug.WriteLine("Unable to continue session " + guid.ToString());
             return -1;
         }
 
@@ -67,7 +66,7 @@ namespace FASTER.core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        protected void InternalRelease()
+        internal void InternalRelease()
         {
             Debug.Assert(threadCtx.retryRequests.Count == 0 &&
                     threadCtx.ioPendingRequests.Count == 0);
@@ -81,7 +80,7 @@ namespace FASTER.core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        protected void InitLocalContext(ref ExecutionContext context, Guid token)
+        internal void InitLocalContext(ref ExecutionContext context, Guid token)
         {
             context = new ExecutionContext
             {
@@ -103,7 +102,7 @@ namespace FASTER.core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        protected bool InternalCompletePending(bool wait = false)
+        internal bool InternalCompletePending(bool wait = false)
         {
             do
             {
@@ -129,7 +128,7 @@ namespace FASTER.core
                 {
                     CompleteIOPendingRequests(threadCtx);
                 }
-                Refresh();
+                InternalRefresh();
                 CompleteRetryRequests(threadCtx);
 
                 done &= (threadCtx.ioPendingRequests.Count == 0);
@@ -145,7 +144,7 @@ namespace FASTER.core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        protected void CompleteRetryRequests(ExecutionContext context)
+        internal void CompleteRetryRequests(ExecutionContext context)
         {
             int count = context.retryRequests.Count;
             for (int i = 0; i < count; i++)
@@ -156,7 +155,7 @@ namespace FASTER.core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        protected void CompleteIOPendingRequests(ExecutionContext context)
+        internal void CompleteIOPendingRequests(ExecutionContext context)
         {
             while (context.readyResponses.TryTake(out AsyncIOContext request))
             {
@@ -165,7 +164,7 @@ namespace FASTER.core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        protected void InternalRetryRequestAndCallback(
+        internal void InternalRetryRequestAndCallback(
                                     ExecutionContext ctx,
                                     PendingContext pendingContext)
         {
@@ -235,7 +234,7 @@ namespace FASTER.core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        protected void InternalContinuePendingRequestAndCallback(
+        internal void InternalContinuePendingRequestAndCallback(
                                     ExecutionContext ctx,
                                     AsyncIOContext request)
         {

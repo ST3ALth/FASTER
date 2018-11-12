@@ -1,6 +1,8 @@
 ﻿// Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT license.
 
+#pragma warning disable 1591
+
 //#define RECORD_INFO_WITH_PIN_COUNT
 
 using System;
@@ -122,25 +124,25 @@ namespace FASTER.core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryPin()
         {
-            throw new NotImplementedException();
+            throw new InvalidOperationException();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryMarkReadOnly()
         {
-            throw new NotImplementedException();
+            throw new InvalidOperationException();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void MarkReadOnly()
         {
-            throw new NotImplementedException();
+            throw new InvalidOperationException();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Unpin()
         {
-            throw new NotImplementedException();
+            throw new InvalidOperationException();
         }
 #endif
         public bool IsNull()

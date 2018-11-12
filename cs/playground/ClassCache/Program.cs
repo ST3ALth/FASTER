@@ -16,10 +16,11 @@ namespace ClassCache
     {
         static void Main(string[] args)
         {
-            var log = FASTERFactory.CreateLogDevice(Path.GetTempPath() + "hybridlog");
-            var h = FASTERFactory.Create
+            var log = FasterFactory.CreateLogDevice(Path.GetTempPath() + "hybridlog");
+            var objlog = FasterFactory.CreateObjectLogDevice(Path.GetTempPath() + "hybridlog");
+            var h = FasterFactory.Create
                 <CacheKey, CacheValue, CacheInput, CacheOutput, CacheContext, CacheFunctions>
-                (1L << 20, log, new CacheFunctions());
+                (1L << 20, new CacheFunctions(), new LogSettings { LogDevice = log, ObjectLogDevice = objlog });
 
             h.StartSession();
 

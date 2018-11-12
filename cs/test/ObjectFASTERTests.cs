@@ -7,40 +7,45 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Linq;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
 using FASTER.core;
 using System.IO;
+using NUnit.Framework;
 
 namespace FASTER.test
 {
 
-    [TestClass]
-    public class ObjectFASTERTests
+    [TestFixture]
+    internal class ObjectFASTERTests
     {
-        private static IManagedFAST<MyKey, MyValue, MyInput, MyOutput, MyContext> fht;
-
-        [ClassInitialize]
-        public static void Setup(TestContext t)
+        private IManagedFasterKV<MyKey, MyValue, MyInput, MyOutput, MyContext> fht;
+        private IDevice log, objlog;
+        
+        [SetUp]
+        public void Setup()
         {
-            var log = FASTERFactory.CreateLogDevice(Path.GetTempPath() + "\\hybridlog_object.log");
-            fht = FASTERFactory.Create
+            log = FasterFactory.CreateLogDevice(TestContext.CurrentContext.TestDirectory + "\\hlog", deleteOnClose: true);
+            objlog = FasterFactory.CreateObjectLogDevice(TestContext.CurrentContext.TestDirectory + "\\hlog", deleteOnClose: true);
+
+            fht = FasterFactory.Create
                 <MyKey, MyValue, MyInput, MyOutput, MyContext, MyFunctions>
-                (indexSizeBuckets: 128, logDevice: log, functions: new MyFunctions(), 
-                LogMutableFraction: 0.1, LogPageSizeBits: 9, LogTotalSizeBytes: 512*16
+                (indexSizeBuckets: 128, functions: new MyFunctions(),
+                logSettings: new LogSettings { LogDevice = log, ObjectLogDevice = objlog, MutableFraction = 0.1, PageSizeBits = 9, MemorySizeBits = 13 },
+                checkpointSettings: new CheckpointSettings { CheckPointType = CheckpointType.FoldOver }
                 );
             fht.StartSession();
         }
 
-        [ClassCleanup]
-        public static void TearDown()
+        [TearDown]
+        public void TearDown()
         {
             fht.StopSession();
             fht = null;
+            log.Close();
         }
 
 
 
-        [TestMethod]
+        [Test]
         public void ObjectInMemWriteRead()
         {
             var key1 = new MyKey { key = 9999999 };
@@ -53,7 +58,30 @@ namespace FASTER.test
             Assert.IsTrue(output.value.value == value.value);
         }
 
-        [TestMethod]
+        [Test]
+        public void ObjectInMemWriteRead2()
+        {
+            var key1 = new MyKey { key = 8999998 };
+            var input1 = new MyInput { value = 23 };
+
+            fht.RMW(key1, input1, null, 0);
+
+            var key2 = new MyKey { key = 8999999 };
+            var input2 = new MyInput { value = 24 };
+            fht.RMW(key2, input2, null, 0);
+
+            MyOutput output = new MyOutput();
+            fht.Read(key1, null, ref output, null, 0);
+
+            Assert.IsTrue(output.value.value == input1.value);
+
+            fht.Read(key2, null, ref output, null, 0);
+            Assert.IsTrue(output.value.value == input2.value);
+
+        }
+
+
+        [Test]
         public void ObjectDiskWriteRead()
         {
             for (int i = 0; i < 2000; i++)

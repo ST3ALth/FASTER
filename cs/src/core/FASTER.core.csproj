@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;net46</TargetFrameworks>
-    <Platforms>x64</Platforms>
+    <Platforms>AnyCPU;x64</Platforms>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -10,40 +10,33 @@
     <RootNamespace>FASTER.core</RootNamespace>
     <AssemblyName>FASTER.core</AssemblyName>
     <ErrorReport>prompt</ErrorReport>
-    <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
-    <SignAssembly>false</SignAssembly>
+    <SignAssembly>true</SignAssembly>
     <ApplicationIcon />
     <OutputType>Library</OutputType>
     <StartupObject />
+    <AssemblyOriginatorKeyFile>../../FASTER.snk</AssemblyOriginatorKeyFile>
+    <DelaySign>false</DelaySign>
+    <DocumentationFile>bin\$(Platform)\$(Configuration)\$(TargetFramework)\$(AssemblyName).xml</DocumentationFile>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
     <DefineConstants>TRACE;DEBUG</DefineConstants>
     <DebugType>full</DebugType>
-    <OutputPath>bin\x64\Debug\</OutputPath>
+    <OutputPath>bin\$(Platform)\Debug\</OutputPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
     <DefineConstants>TRACE</DefineConstants>
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
-    <OutputPath>bin\x64\Release\</OutputPath>
+    <OutputPath>bin\$(Platform)\Release\</OutputPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(TargetFramework)'!='net46'">
     <DefineConstants>$(DefineConstants);DOTNETCORE</DefineConstants>
   </PropertyGroup>
-  <ItemGroup>
-    <None Include="..\native\bin\x64\Release\adv-file-ops.dll" Link="adv-file-ops.dll">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Include="..\native\bin\x64\Release\readtsc.dll" Link="readtsc.dll">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-  </ItemGroup>
 
-    <ItemGroup>
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Scripting">
-      <Version>2.8.2</Version>
-    </PackageReference>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="1.1.0" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Scripting" Version="2.8.2" />
     <PackageReference Include="System.Reflection.Emit.ILGeneration" Version="4.3.0" />
     <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="4.5.1" />
   </ItemGroup>
@@ -51,17 +44,30 @@
     <PackageReference Include="System.Runtime.Loader" Version="4.3.0" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Update="Properties\Resources.Designer.cs">
-      <DesignTime>True</DesignTime>
-      <AutoGen>True</AutoGen>
-      <DependentUpon>Resources.resx</DependentUpon>
-    </Compile>
-  </ItemGroup>
-  <ItemGroup>
-    <EmbeddedResource Update="Properties\Resources.resx">
-      <Generator>ResXFileCodeGenerator</Generator>
-      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
-    </EmbeddedResource>
+    <EmbeddedResource Include="Index/FASTER/AsyncIO.cs" />
+    <EmbeddedResource Include="Index/FASTER/Checkpoint.cs" />
+    <EmbeddedResource Include="Index/Common/Contexts.cs" />
+    <EmbeddedResource Include="Index/FASTER/FASTER.cs" />
+    <EmbeddedResource Include="Index/FASTER/FASTERBase.cs" />
+    <EmbeddedResource Include="Index/FASTER/FASTERImpl.cs" />
+    <EmbeddedResource Include="Index/FASTER/FASTERThread.cs" />
+    <EmbeddedResource Include="ManagedLayer/IFASTER_Mixed.cs" />
+    <EmbeddedResource Include="Index/FASTER/IndexCheckpoint.cs" />
+    <EmbeddedResource Include="Index/FASTER/IndexRecovery.cs" />
+    <EmbeddedResource Include="Index/FASTER/Recovery.cs" />
+    <EmbeddedResource Include="Index/Common/Layout.cs" />
+    <EmbeddedResource Include="ManagedLayer/MixedContextWrapper.cs" />
+    <EmbeddedResource Include="ManagedLayer/MixedFunctionsWrapper.cs" />
+    <EmbeddedResource Include="ManagedLayer/MixedInputWrapper.cs" />
+    <EmbeddedResource Include="ManagedLayer/MixedKeyWrapper.cs" />
+    <EmbeddedResource Include="ManagedLayer/MixedManagedFAST.cs" />
+    <EmbeddedResource Include="ManagedLayer/MixedOutputWrapper.cs" />
+    <EmbeddedResource Include="ManagedLayer/MixedUnwrappedTypes.cs" />
+    <EmbeddedResource Include="ManagedLayer/MixedUserFunctions.cs" />
+    <EmbeddedResource Include="ManagedLayer/MixedValueWrapper.cs" />
+    <EmbeddedResource Include="Allocator/PersistentMemoryMalloc.cs" />
+    <EmbeddedResource Include="Utilities/AsyncResultTypes.cs" />
+    <EmbeddedResource Include="Utilities/StateTransitions.cs" />
   </ItemGroup>
 
 </Project>

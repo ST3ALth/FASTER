@@ -14,7 +14,7 @@ using System.Threading.Tasks;
 
 namespace SumStore
 {
-    public class ConcurrentRecoveryTest : IFASTERRecoveryTest
+    public class ConcurrentRecoveryTest : IFasterRecoveryTest
     {
         const long numUniqueKeys = (1 << 22);
         const long keySpace = (1L << 14);
@@ -24,19 +24,20 @@ namespace SumStore
         const long checkpointInterval = (1 << 22);
         int threadCount;
         int numActiveThreads;
-        ICustomFaster fht;
+        ICustomFasterKv fht;
         BlockingCollection<Input[]> inputArrays;
         List<Guid> tokens;
         public ConcurrentRecoveryTest(int threadCount)
         {
             this.threadCount = threadCount;
             tokens = new List<Guid>();
-            var log = FASTERFactory.CreateLogDevice(DirectoryConfiguration.GetHybridLogFileName());
+
+            var log = FasterFactory.CreateLogDevice("logs\\hlog");
 
             // Create FASTER index
-            fht = FASTERFactory.Create
-                <AdId, NumClicks, Input, Output, Empty, Functions, ICustomFaster>
-                (keySpace, log);
+            fht = FasterFactory.Create
+                <AdId, NumClicks, Input, Output, Empty, Functions, ICustomFasterKv>
+                (keySpace, new LogSettings { LogDevice = log }, new CheckpointSettings { CheckpointDir = "logs" });
             numActiveThreads = 0;
 
             inputArrays = new BlockingCollection<Input[]>();
@@ -181,7 +182,7 @@ namespace SumStore
             Console.WriteLine("Recovery Done!");
 
             var checkpointInfo = default(HybridLogRecoveryInfo);
-            checkpointInfo.Recover(token);
+            checkpointInfo.Recover(token, "logs");
 
             threadCount = checkpointInfo.numThreads;
 
@@ -299,7 +300,7 @@ namespace SumStore
 
             // Test outputs
             var checkpointInfo = default(HybridLogRecoveryInfo);
-            checkpointInfo.Recover(hybridLogToken);
+            checkpointInfo.Recover(hybridLogToken, "logs");
 
             // Compute expected array
             long[] expected = new long[numUniqueKeys];

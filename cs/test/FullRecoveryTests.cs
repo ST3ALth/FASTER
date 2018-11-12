@@ -4,15 +4,15 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.IO;
 using FASTER.core;
+using NUnit.Framework;
 
 namespace FASTER.test.recovery.sumstore
 {
 
-    [TestClass]
-    public class FullRecoveryTests
+    [TestFixture]
+    internal class FullRecoveryTests
     {
         const long numUniqueKeys = (1 << 14);
         const long keySpace = (1L << 14);
@@ -23,8 +23,9 @@ namespace FASTER.test.recovery.sumstore
         private ICustomFaster fht;
         private string test_path;
         private Guid token;
+        private IDevice log;
 
-        [TestInitialize]
+        [SetUp]
         public void Setup()
         {
             if (test_path == null)
@@ -34,19 +35,21 @@ namespace FASTER.test.recovery.sumstore
                     Directory.CreateDirectory(test_path);
             }
 
-            var log = FASTERFactory.CreateLogDevice(test_path + "\\hlog");
+            log = FasterFactory.CreateLogDevice(test_path + "\\hlog");
 
             fht = 
-                FASTERFactory.Create
+                FasterFactory.Create
                 <AdId, NumClicks, Input, Output, Empty, Functions, ICustomFaster>
-                (keySpace, log, checkpointDir: test_path);
+                (keySpace, new LogSettings { LogDevice = log }, new CheckpointSettings { CheckpointDir = test_path });
         }
 
-        [TestCleanup]
+        [TearDown]
         public void TearDown()
         {
             fht.StopSession();
             fht = null;
+            log.Close();
+            DeleteDirectory(test_path);
         }
 
         public static void DeleteDirectory(string path)
@@ -70,10 +73,11 @@ namespace FASTER.test.recovery.sumstore
             }
         }
 
-        [TestMethod]
+        [Test]
         public void RecoveryTest1()
         {
             Populate();
+            log.Close();
             Setup();
             RecoverAndTest(token, token);
         }
@@ -109,6 +113,8 @@ namespace FASTER.test.recovery.sumstore
                         else
                             while (!fht.TakeFullCheckpoint(out Guid nextToken))
                                 fht.Refresh();
+
+                        fht.CompleteCheckpoint(true);
 
                         first = false;
                     }
@@ -163,35 +169,35 @@ namespace FASTER.test.recovery.sumstore
             // Release
             fht.StopSession();
 
-            // Test outputs
+            // Set checkpoint directory
             Config.CheckpointDirectory = test_path;
-            var recoveryInfo = default(HybridLogRecoveryInfo);
-            recoveryInfo.Recover(cprVersion);
 
-            int num_threads = recoveryInfo.numThreads;
-            DirectoryInfo info = new DirectoryInfo(DirectoryConfiguration.GetHybridLogCheckpointFolder(cprVersion));
-            List<ExecutionContext> cpr_points = new List<ExecutionContext>();
-            foreach (var file in info.GetFiles())
-            {
-                if (file.Name != "info.dat" && file.Name != "snapshot.dat")
-                {
-                    using (var reader = new StreamReader(file.FullName))
-                    {
-                        var ctx = new ExecutionContext();
-                        ctx.Load(reader);
-                        cpr_points.Add(ctx);
-                    }
-                }
-            }
+            // Test outputs
+            var checkpointInfo = default(HybridLogRecoveryInfo);
+            checkpointInfo.Recover(cprVersion);
 
             // Compute expected array
             long[] expected = new long[numUniqueKeys];
-            long[] found = new long[numUniqueKeys];
-            long sno = cpr_points.First().serialNum;
-            for (long i = 0; i <= sno; i++)
+            foreach (var guid in checkpointInfo.continueTokens.Keys)
             {
-                var id = i % numUniqueKeys;
-                expected[id]++;
+                var sno = checkpointInfo.continueTokens[guid];
+                for (long i = 0; i <= sno; i++)
+                {
+                    var id = i % numUniqueKeys;
+                    expected[id]++;
+                }
+            }
+
+            int threadCount = 1; // single threaded test
+            int numCompleted = threadCount - checkpointInfo.continueTokens.Count;
+            for (int t = 0; t < numCompleted; t++)
+            {
+                var sno = numOps;
+                for (long i = 0; i < sno; i++)
+                {
+                    var id = i % numUniqueKeys;
+                    expected[id]++;
+                }
             }
 
             // Assert if expected is same as found

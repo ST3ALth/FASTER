@@ -1,6 +1,8 @@
 ﻿// Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT license.
 
+#pragma warning disable 1591
+
 using System;
 using System.IO;
 
@@ -12,7 +14,7 @@ namespace FASTER.core
 #else
     class
 #endif
-        MixedKey : IFASTERKey<MixedKey>
+        MixedKey : IFasterKey<MixedKey>
     {
         public long key;
 
@@ -49,7 +51,7 @@ namespace FASTER.core
 #else
     class
 #endif
- MixedValue : IFASTERValue<MixedValue>
+ MixedValue : IFasterValue<MixedValue>
     {
         public long value;
         public MixedValue Clone()

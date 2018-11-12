@@ -11,9 +11,11 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RootNamespace>FASTER.benchmark</RootNamespace>
     <ErrorReport>prompt</ErrorReport>
-    <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
     <RestoreProjectStyle>PackageReference</RestoreProjectStyle>
     <Prefer32Bit>true</Prefer32Bit>
+    <AssemblyOriginatorKeyFile>../FASTER.snk</AssemblyOriginatorKeyFile>
+    <DelaySign>false</DelaySign>
+    <SignAssembly>true</SignAssembly>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
@@ -34,7 +36,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="CommandLineParser" Version="2.2.1" />
+    <PackageReference Include="CommandLineParser" Version="2.3.0" />
   </ItemGroup>
 
   <ItemGroup>

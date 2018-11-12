@@ -1,6 +1,8 @@
 ﻿// Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT license.
 
+#pragma warning disable 1591
+
 using System;
 using System.IO;
 using System.Runtime.CompilerServices;
@@ -53,16 +55,16 @@ namespace FASTER.core
 
         public static void Serialize(MixedValueWrapper* key, Stream toStream)
         {
-            throw new NotImplementedException();
+            throw new InvalidOperationException();
         }
 
         public static void Deserialize(MixedValueWrapper* key, Stream fromStream)
         {
-            throw new NotImplementedException();
+            throw new InvalidOperationException();
         }
         public static void Free(MixedValueWrapper* key)
         {
-            throw new NotImplementedException();
+            throw new InvalidOperationException();
         }
     #endregion
 
@@ -79,7 +81,7 @@ namespace FASTER.core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int GetLength(MixedValueWrapper* input)
         {
-            return sizeof(void*);
+            return BlittableTypeWrapper.kSize;
         }
 
         public static void Copy(MixedValueWrapper* src, MixedValueWrapper* dst)
@@ -214,16 +216,16 @@ namespace FASTER.core
 
         public static void Serialize(MixedValueWrapper* key, Stream toStream)
         {
-            throw new NotImplementedException();
+            throw new InvalidOperationException();
         }
 
         public static void Deserialize(MixedValueWrapper* key, Stream fromStream)
         {
-            throw new NotImplementedException();
+            throw new InvalidOperationException();
         }
         public static void Free(MixedValueWrapper* key)
         {
-            throw new NotImplementedException();
+            throw new InvalidOperationException();
         }
     #endregion
 
@@ -247,7 +249,7 @@ namespace FASTER.core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int GetLength(MixedValueWrapper* input)
         {
-            return sizeof(void*) + sizeof(int);
+            return BlittableTypeWrapper.kSize + sizeof(int);
         }
 
         public static void Copy(MixedValueWrapper* src, MixedValueWrapper* dst)

@@ -1,6 +1,8 @@
 ﻿// Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT license.
 
+#pragma warning disable 1591
+
 #define EIGHT_BYTE_KEY 
 //#define FIXED_SIZE_KEY
 //#define VARIABLE_SIZE_KEY
@@ -115,17 +117,17 @@ namespace FASTER.core
 
         public static void Serialize(Key* key, Stream toStream)
         {
-            throw new NotImplementedException();
+            throw new InvalidOperationException();
         }
 
         public static void Deserialize(Key* key, Stream fromStream)
         {
-            throw new NotImplementedException();
+            throw new InvalidOperationException();
         }
 
         public static void Free(Key* key)
         {
-            throw new NotImplementedException();
+            throw new InvalidOperationException();
         }
 
         public static Key* MoveToContext(Key* key)

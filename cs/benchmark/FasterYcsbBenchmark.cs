@@ -25,11 +25,14 @@ namespace FASTER.benchmark
             ReadModifyWrite = 2
         }
 
-        const long kInitCount = 250000000;
-        const long kTxnCount = 1000000000;
+        const bool kUseSyntheticData = true;
+        const bool kUseSmallData = false;
+        const long kInitCount = kUseSmallData ? 2500480 : 250000000;
+        const long kTxnCount = kUseSmallData ? 10000000 : 1000000000;
+        const int kMaxKey = kUseSmallData ? 1 << 22 : 1 << 28;
+
         const int kFileChunkSize = 4096;
         const long kChunkSize = 640;
-        const bool kUseSyntheticData = false;
 
         Key[] init_keys_;
 
@@ -43,7 +46,7 @@ namespace FASTER.benchmark
         readonly IDevice device;
 
 #if USE_CODEGEN
-        IFASTER
+        IFasterKV
 #else
         FasterKV
 #endif
@@ -57,7 +60,6 @@ namespace FASTER.benchmark
         readonly string distribution;
         readonly int readPercent;
 
-        const int kMaxKey = 268435456;
         const int kRunSeconds = 30;
         const int kCheckpointSeconds = -1;
 
@@ -81,76 +83,19 @@ namespace FASTER.benchmark
             threadMaximumLatency = new double[threadCount];
             threadProgress = new long[threadCount];
             writeStats = new bool[threadCount];
-            freq = HiResTimer.EstimateCPUFrequency();
+            freq = Stopwatch.Frequency;
 #endif
 
-            device = FASTERFactory.CreateLogDevice("D:\\data\\hlog");
+            device = FasterFactory.CreateLogDevice("C:\\data\\hlog");
 
 #if USE_CODEGEN
-            store = FASTERFactory.Create<Key, Value, Input, Output, Context, Functions, IFASTER>
+            store = FasterFactory.Create<Key, Value, Input, Output, Context, Functions, IFasterKV>
 #else
             store = new FasterKV
 #endif
-                (kMaxKey / 2, device);
+                (kMaxKey / 2, device, null);
         }
 
-        private void SetupYcsb(int thread_idx)
-        {
-            if (numaStyle == 0)
-                Native32.AffinitizeThreadRoundRobin((uint)thread_idx);
-            else
-                Native32.AffinitizeThreadShardedTwoNuma((uint)thread_idx);
-
-            store.StartSession();
-
-#if DASHBOARD
-            var tstart = HiResTimer.Rdtsc();
-            var tstop1 = tstart;
-            var lastWrittenValue = 0;
-            int count = 0;
-#endif
-
-            Value value = default(Value);
-
-            for (long chunk_idx = Interlocked.Add(ref idx_, kChunkSize) - kChunkSize;
-                chunk_idx < kInitCount;
-                chunk_idx = Interlocked.Add(ref idx_, kChunkSize) - kChunkSize)
-            {
-                for (long idx = chunk_idx; idx < chunk_idx + kChunkSize; ++idx)
-                {
-                    if (idx % 256 == 0)
-                    {
-                        store.Refresh();
-
-                        if (idx % 65536 == 0)
-                        {
-                            store.CompletePending(false);
-                        }
-                    }
-
-                    Key key = init_keys_[idx];
-                    store.Upsert(&key, &value, null, 1);
-                }
-#if DASHBOARD
-                count += (int)kChunkSize;
-
-                //Check if stats collector is requesting for statistics
-                if (writeStats[thread_idx])
-                {
-                    var tstart1 = tstop1;
-                    tstop1 = HiResTimer.Rdtsc();
-                    threadThroughput[thread_idx] = (count - lastWrittenValue) / ((tstop1 - tstart1) / freq);
-                    lastWrittenValue = count;
-                    writeStats[thread_idx] = false;
-                    statsWritten[thread_idx].Set();
-                }
-#endif
-            }
-
-
-            store.CompletePending(true);
-            store.StopSession();
-        }
         private void RunYcsb(int thread_idx)
         {
             RandomGenerator rng = new RandomGenerator((uint)(1 + thread_idx));
@@ -158,7 +103,7 @@ namespace FASTER.benchmark
             if (numaStyle == 0)
                 Native32.AffinitizeThreadRoundRobin((uint)thread_idx);
             else
-                Native32.AffinitizeThreadShardedTwoNuma((uint)thread_idx);
+                Native32.AffinitizeThreadShardedNuma((uint)thread_idx, 2); // assuming two NUMA sockets
 
             Stopwatch sw = new Stopwatch();
             sw.Start();
@@ -168,7 +113,7 @@ namespace FASTER.benchmark
             long writes_done = 0;
 
 #if DASHBOARD
-            var tstart = HiResTimer.Rdtsc();
+            var tstart = Stopwatch.GetTimestamp();
             var tstop1 = tstart;
             var lastWrittenValue = 0;
             int count = 0;
@@ -236,7 +181,7 @@ namespace FASTER.benchmark
                                 break;
                             }
                         default:
-                            throw new NotImplementedException("Unexpected op: " + op);
+                            throw new InvalidOperationException("Unexpected op: " + op);
                     }
                 }
 
@@ -247,7 +192,7 @@ namespace FASTER.benchmark
                 if (writeStats[thread_idx])
                 {
                     var tstart1 = tstop1;
-                    tstop1 = HiResTimer.Rdtsc();
+                    tstop1 = Stopwatch.GetTimestamp();
                     threadProgress[thread_idx] = count;
                     threadThroughput[thread_idx] = (count - lastWrittenValue) / ((tstop1 - tstart1) / freq);
                     lastWrittenValue = count;
@@ -264,6 +209,170 @@ namespace FASTER.benchmark
             Console.WriteLine("Thread " + thread_idx + " done; " + reads_done + " reads, " +
                 writes_done + " writes, in " + sw.ElapsedMilliseconds + " ms.");
             Interlocked.Add(ref total_ops_done, reads_done + writes_done);
+        }
+
+        public unsafe void Run()
+        {
+            RandomGenerator rng = new RandomGenerator();
+
+            LoadData();
+
+            input_ = new Input[8];
+            for (int i = 0; i < 8; i++)
+            {
+                input_[i].value = i;
+            }
+            GCHandle handle = GCHandle.Alloc(input_, GCHandleType.Pinned);
+            input_ptr = (Input*)handle.AddrOfPinnedObject();
+
+#if DASHBOARD
+            var dash = new Thread(() => DoContinuousMeasurements());
+            dash.Start();
+#endif
+
+            Thread[] workers = new Thread[threadCount];
+
+            Console.WriteLine("Executing setup.");
+
+            // Setup the store for the YCSB benchmark.
+            for (int idx = 0; idx < threadCount; ++idx)
+            {
+                int x = idx;
+                workers[idx] = new Thread(() => SetupYcsb(x));
+            }
+
+            Stopwatch sw = new Stopwatch();
+            sw.Start();
+            // Start threads.
+            foreach (Thread worker in workers)
+            {
+                worker.Start();
+            }
+            foreach (Thread worker in workers)
+            {
+                worker.Join();
+            }
+            sw.Stop();
+            Console.WriteLine("Loading time: {0}ms", sw.ElapsedMilliseconds);
+
+            long startTailAddress = store.LogTailAddress;
+            Console.WriteLine("Start tail address = " + startTailAddress);
+
+
+            idx_ = 0;
+            store.DumpDistribution();
+
+            Console.WriteLine("Executing experiment.");
+
+            // Run the experiment.
+            for (int idx = 0; idx < threadCount; ++idx)
+            {
+                int x = idx;
+                workers[idx] = new Thread(() => RunYcsb(x));
+            }
+            // Start threads.
+            foreach (Thread worker in workers)
+            {
+                worker.Start();
+            }
+
+            Stopwatch swatch = new Stopwatch();
+            swatch.Start();
+
+            if (kCheckpointSeconds <= 0)
+            {
+                Thread.Sleep(TimeSpan.FromSeconds(kRunSeconds));
+            }
+            else
+            {
+                int runSeconds = 0;
+                while (runSeconds < kRunSeconds)
+                {
+                    Thread.Sleep(TimeSpan.FromSeconds(kCheckpointSeconds));
+                    store.TakeFullCheckpoint(out Guid token);
+                    runSeconds += kCheckpointSeconds;
+                }
+            }
+
+            swatch.Stop();
+
+            done = true;
+
+            foreach (Thread worker in workers)
+            {
+                worker.Join();
+            }
+
+#if DASHBOARD
+            dash.Abort();
+#endif
+
+            double seconds = swatch.ElapsedMilliseconds / 1000.0;
+            long endTailAddress = store.LogTailAddress;
+            Console.WriteLine("End tail address = " + endTailAddress);
+
+            Console.WriteLine("Total " + total_ops_done + " ops done " + " in " + seconds + " secs.");
+            Console.WriteLine("##, " + distribution + ", " + numaStyle + ", " + readPercent + ", "
+                + threadCount + ", " + total_ops_done / seconds + ", "
+                + (endTailAddress - startTailAddress));
+        }
+
+        private void SetupYcsb(int thread_idx)
+        {
+            if (numaStyle == 0)
+                Native32.AffinitizeThreadRoundRobin((uint)thread_idx);
+            else
+                Native32.AffinitizeThreadShardedNuma((uint)thread_idx, 2); // assuming two NUMA sockets
+
+            store.StartSession();
+
+#if DASHBOARD
+            var tstart = Stopwatch.GetTimestamp();
+            var tstop1 = tstart;
+            var lastWrittenValue = 0;
+            int count = 0;
+#endif
+
+            Value value = default(Value);
+
+            for (long chunk_idx = Interlocked.Add(ref idx_, kChunkSize) - kChunkSize;
+                chunk_idx < kInitCount;
+                chunk_idx = Interlocked.Add(ref idx_, kChunkSize) - kChunkSize)
+            {
+                for (long idx = chunk_idx; idx < chunk_idx + kChunkSize; ++idx)
+                {
+                    if (idx % 256 == 0)
+                    {
+                        store.Refresh();
+
+                        if (idx % 65536 == 0)
+                        {
+                            store.CompletePending(false);
+                        }
+                    }
+
+                    Key key = init_keys_[idx];
+                    store.Upsert(&key, &value, null, 1);
+                }
+#if DASHBOARD
+                count += (int)kChunkSize;
+
+                //Check if stats collector is requesting for statistics
+                if (writeStats[thread_idx])
+                {
+                    var tstart1 = tstop1;
+                    tstop1 = Stopwatch.GetTimestamp();
+                    threadThroughput[thread_idx] = (count - lastWrittenValue) / ((tstop1 - tstart1) / freq);
+                    lastWrittenValue = count;
+                    writeStats[thread_idx] = false;
+                    statsWritten[thread_idx].Set();
+                }
+#endif
+            }
+
+
+            store.CompletePending(true);
+            store.StopSession();
         }
 
 #if DASHBOARD
@@ -326,11 +435,11 @@ namespace FASTER.benchmark
 
                     if (measureLatency)
                     {
-                        Console.WriteLine("{0} \t {1:0.000} \t {2} \t {3} \t {4} \t {5}", ver, totalThroughput / (double)1000000, totalLatency / threadCount, maximumLatency, store.Size, totalProgress);
+                        Console.WriteLine("{0} \t {1:0.000} \t {2} \t {3} \t {4} \t {5}", ver, totalThroughput / (double)1000000, totalLatency / threadCount, maximumLatency, store.LogTailAddress, totalProgress);
                     }
                     else
                     {
-                        Console.WriteLine("{0} \t {1:0.000} \t {2} \t {3}", ver, totalThroughput / (double)1000000, store.Size, totalProgress);
+                        Console.WriteLine("{0} \t {1:0.000} \t {2} \t {3}", ver, totalThroughput / (double)1000000, store.LogTailAddress, totalProgress);
                     }
                 }
             }
@@ -422,6 +531,8 @@ namespace FASTER.benchmark
                     throw new InvalidDataException("Txn file load fail!" + count + ":" + kTxnCount);
                 }
             }
+
+            Console.WriteLine("loaded " + kTxnCount + " txns.");
         }
 
         private void LoadData()
@@ -456,6 +567,8 @@ namespace FASTER.benchmark
 
         private void LoadSyntheticData()
         {
+            Console.WriteLine("Loading synthetic data (uniform distribution)");
+
             init_keys_ = new Key[kInitCount];
             long val = 0;
             for (int idx = 0; idx < kInitCount; idx++)
@@ -481,105 +594,6 @@ namespace FASTER.benchmark
         }
         #endregion
 
-        public unsafe void Run()
-        {
-            RandomGenerator rng = new RandomGenerator();
 
-            LoadData();
-
-            input_ = new Input[8];
-            for (int i = 0; i < 8; i++)
-            {
-                input_[i].value = i;
-            }
-            GCHandle handle = GCHandle.Alloc(input_, GCHandleType.Pinned);
-            input_ptr = (Input*)handle.AddrOfPinnedObject();
-
-            Console.WriteLine("loaded " + kTxnCount + " txns.");
-
-#if DASHBOARD
-            var dash = new Thread(() => DoContinuousMeasurements());
-            dash.Start();
-#endif
-
-            Thread[] workers = new Thread[threadCount];
-
-            Console.WriteLine("Executing setup.");
-
-            // Setup the store for the YCSB benchmark.
-            for (int idx = 0; idx < threadCount; ++idx)
-            {
-                int x = idx;
-                workers[idx] = new Thread(() => SetupYcsb(x));
-            }
-            // Start threads.
-            foreach (Thread worker in workers)
-            {
-                worker.Start();
-            }
-            foreach (Thread worker in workers)
-            {
-                worker.Join();
-            }
-
-            long startTailAddress = store.Size;
-            Console.WriteLine("Start tail address = " + startTailAddress);
-
-
-            idx_ = 0;
-            store.DumpDistribution();
-
-            Console.WriteLine("Executing experiment.");
-
-            // Run the experiment.
-            for (int idx = 0; idx < threadCount; ++idx)
-            {
-                int x = idx;
-                workers[idx] = new Thread(() => RunYcsb(x));
-            }
-            // Start threads.
-            foreach (Thread worker in workers)
-            {
-                worker.Start();
-            }
-
-            Stopwatch swatch = new Stopwatch();
-            swatch.Start();
-
-            if (kCheckpointSeconds <= 0)
-            {
-                Thread.Sleep(TimeSpan.FromSeconds(kRunSeconds));
-            }
-            else
-            {
-                int runSeconds = 0;
-                while (runSeconds < kRunSeconds)
-                {
-                    Thread.Sleep(TimeSpan.FromSeconds(kCheckpointSeconds));
-                    store.TakeFullCheckpoint(out Guid token);
-                    runSeconds += kCheckpointSeconds;
-                }
-            }
-
-            swatch.Stop();
-
-            done = true;
-
-            foreach (Thread worker in workers)
-            {
-                worker.Join();
-            }
-
-            double seconds = swatch.ElapsedMilliseconds / 1000.0;
-            long endTailAddress = store.Size;
-            Console.WriteLine("End tail address = " + endTailAddress);
-
-            Console.WriteLine("Total " + total_ops_done + " ops done " + " in " + seconds + " secs.");
-            Console.WriteLine("##, " + distribution + ", " + numaStyle + ", " + readPercent + ", "
-                + threadCount + ", " + total_ops_done / seconds + ", " 
-                + (endTailAddress - startTailAddress));
-
-            Console.ReadLine();
-        }
     }
 }

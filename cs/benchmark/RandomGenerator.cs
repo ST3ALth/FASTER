@@ -3,12 +3,13 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace FASTER.core
+namespace FASTER.benchmark
 {
     public class RandomGenerator
     {
@@ -21,8 +22,7 @@ namespace FASTER.core
         {
             if (seed == 0)
             {
-                long counter = 0;
-                HiResTimer.QueryPerformanceCounter(ref counter);
+                long counter = Stopwatch.GetTimestamp();
                 x = (uint)(counter & 0x0FFFFFFF);
             }
             else

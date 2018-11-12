@@ -4,37 +4,27 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.IO;
 using FASTER.core;
 using System.Threading;
+using NUnit.Framework;
 
 namespace FASTER.test.recovery
 {
 
-    [TestClass]
-    public class ComponentRecoveryTests
+    [TestFixture]
+    internal class ComponentRecoveryTests
     {
-        [TestInitialize]
-        public void Setup()
-        {
-        }
-
-        [TestCleanup]
-        public void TearDown()
-        {
-        }
-
-        [TestMethod]
+        [Test]
         public unsafe void MallocFixedPageSizeRecoveryTest()
         {
             int seed = 123;
             var rand1 = new Random(seed);
-            IDevice device = new LocalStorageDevice("test_ofb.dat", false, false, true, true);
+            var device = new LocalStorageDevice(TestContext.CurrentContext.TestDirectory + "\\test_ofb.dat", deleteOnClose: true);
             var allocator = new MallocFixedPageSize<HashBucket>();
 
             //do something
-            int numBucketsToAdd = 16 * MallocFixedPageSize<HashBucket>.PageSize;
+            int numBucketsToAdd = 16 * allocator.GetPageSize();
             long[] logicalAddresses = new long[numBucketsToAdd];
             for (int i = 0; i < numBucketsToAdd; i++)
             {
@@ -48,14 +38,14 @@ namespace FASTER.test.recovery
             }
 
             //issue call to checkpoint
-            allocator.begin_checkpoint(device, 0, out ulong numBytesWritten);
+            allocator.BeginCheckpoint(device, 0, out ulong numBytesWritten);
             //wait until complete
             allocator.IsCheckpointCompleted(true);
 
 
             var recoveredAllocator = new MallocFixedPageSize<HashBucket>();
             //issue call to recover
-            recoveredAllocator.begin_recovery(device, 0, numBucketsToAdd, numBytesWritten, out ulong numBytesRead);
+            recoveredAllocator.BeginRecovery(device, 0, numBucketsToAdd, numBytesWritten, out ulong numBytesRead);
             //wait until complete
             recoveredAllocator.IsRecoveryCompleted(true);
 
@@ -73,17 +63,17 @@ namespace FASTER.test.recovery
             }
         }
 
-        [TestMethod]
+        [Test]
         public unsafe void TestFuzzyIndexRecovery()
         {
             int seed = 123;
             int size = 1 << 16;
             long numAdds = 1 << 18;
 
-            IDevice ht_device = new LocalStorageDevice("ht.dat", false, false, true, true);
-            IDevice ofb_device = new LocalStorageDevice("ofb.dat", false, false, true, true);
+            IDevice ht_device = new LocalStorageDevice(TestContext.CurrentContext.TestDirectory + "\\ht.dat", deleteOnClose: true);
+            IDevice ofb_device = new LocalStorageDevice(TestContext.CurrentContext.TestDirectory + "\\ofb.dat", deleteOnClose: true);
 
-            var hash_table1 = new FASTERBase();
+            var hash_table1 = new FasterBase();
             hash_table1.Initialize(size, 512);
 
             //do something
@@ -111,7 +101,7 @@ namespace FASTER.test.recovery
             //wait until complete
             hash_table1.IsIndexFuzzyCheckpointCompleted(true);
 
-            var hash_table2 = new FASTERBase();
+            var hash_table2 = new FasterBase();
             hash_table2.Initialize(size, 512);
 
             //issue recover call

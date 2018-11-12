@@ -9,10 +9,11 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Runtime.InteropServices;
 using System.Diagnostics;
+using System.Globalization;
 
 namespace FASTER.core
 {
-    public static class Constants
+    internal static class Constants
     {
         /// Size of cache line in bytes
         public const int kCacheLineBytes = 64;
@@ -78,7 +79,7 @@ namespace FASTER.core
     }
 
     [StructLayout(LayoutKind.Explicit, Size = Constants.kEntriesPerBucket * 8)]
-    public unsafe struct HashBucket
+    internal unsafe struct HashBucket
     {
 
         public const long kPinConstant = (1L << 48);
@@ -87,18 +88,18 @@ namespace FASTER.core
 
         [FieldOffset(0)]
         public fixed long bucket_entries[Constants.kEntriesPerBucket];
-  
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool TryAcquireSharedLatch(HashBucket* bucket)
         {
-            return Interlocked.Add(ref bucket->bucket_entries[Constants.kOverflowBucketIndex], 
+            return Interlocked.Add(ref bucket->bucket_entries[Constants.kOverflowBucketIndex],
                                    kPinConstant) > 0;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void ReleaseSharedLatch(HashBucket* bucket)
         {
-            Interlocked.Add(ref bucket->bucket_entries[Constants.kOverflowBucketIndex], 
+            Interlocked.Add(ref bucket->bucket_entries[Constants.kOverflowBucketIndex],
                             -kPinConstant);
         }
 
@@ -111,7 +112,7 @@ namespace FASTER.core
                 long desired_word = expected_word | kExclusiveLatchBitMask;
                 var found_word = Interlocked.CompareExchange(
                                     ref bucket->bucket_entries[Constants.kOverflowBucketIndex],
-                                    desired_word, 
+                                    desired_word,
                                     expected_word);
                 return found_word == expected_word;
             }
@@ -139,7 +140,7 @@ namespace FASTER.core
     // Long value layout: [1-bit tentative][15-bit TAG][48-bit address]
     // Physical little endian memory layout: [48-bit address][15-bit TAG][1-bit tentative]
     [StructLayout(LayoutKind.Explicit, Size = 8)]
-    public struct HashBucketEntry
+    internal struct HashBucketEntry
     {
         [FieldOffset(0)]
         public long word;
@@ -213,7 +214,7 @@ namespace FASTER.core
         }
     }
 
-    public unsafe struct InternalHashTable
+    internal unsafe struct InternalHashTable
     {
         public long size;
         public long size_mask;
@@ -223,83 +224,92 @@ namespace FASTER.core
         public HashBucket* tableAligned;
     }
 
-	public unsafe partial class FASTERBase
-	{
-		// Initial size of the table
-		protected long minTableSize = 16;
+    public unsafe partial class FasterBase
+    {
+        // Initial size of the table
+        internal long minTableSize = 16;
 
-		// Allocator for the hash buckets
-		protected MallocFixedPageSize<HashBucket> overflowBucketsAllocator = new MallocFixedPageSize<HashBucket>();
+        // Allocator for the hash buckets
+        internal MallocFixedPageSize<HashBucket> overflowBucketsAllocator = new MallocFixedPageSize<HashBucket>();
 
-		// An array of size two, that contains the old and new versions of the hash-table
-		protected internal InternalHashTable[] state = new InternalHashTable[2];
+        // An array of size two, that contains the old and new versions of the hash-table
+        internal InternalHashTable[] state = new InternalHashTable[2];
 
-		// Array used to denote if a specific chunk is merged or not
-		protected internal long[] splitStatus;
+        // Array used to denote if a specific chunk is merged or not
+        internal long[] splitStatus;
 
         // Used as an atomic counter to check if resizing is complete
-        protected long numPendingChunksToBeSplit;
+        internal long numPendingChunksToBeSplit;
 
-		// Epoch set for resizing
-		protected int resizeEpoch;
+        // Epoch set for resizing
+        internal int resizeEpoch;
 
-		protected LightEpoch epoch;
+        internal LightEpoch epoch;
 
-        protected ResizeInfo resizeInfo;
+        internal ResizeInfo resizeInfo;
 
-		protected long currentSize;
+        internal long currentSize;
 
-		public FASTERBase()
-		{
+        /// <summary>
+        /// Constructor
+        /// </summary>
+        public FasterBase()
+        {
             epoch = LightEpoch.Instance;
-		}
+        }
 
-		public long KeyCount
-		{
-			get { return currentSize; }
-		}
+        internal Status Free()
+        {
+            Free(0);
+            Free(1);
+            return Status.OK;
+        }
 
-		public Status Free()
-		{
-			Free(0);
-			Free(1);
-			return Status.OK;
-		}
-
-		private Status Free(int version)
-		{
+        private Status Free(int version)
+        {
             state[version].tableHandle.Free();
-			state[version].tableRaw = null;
+            state[version].tableRaw = null;
             state[version].tableAligned = null;
-			return Status.OK;
-		}
+            return Status.OK;
+        }
 
-		public void Initialize(long size, int sector_size)
-		{
-			if (!Utility.IsPowerOfTwo(size))
-			{
+        /// <summary>
+        /// Initialize
+        /// </summary>
+        /// <param name="size"></param>
+        /// <param name="sector_size"></param>
+        public void Initialize(long size, int sector_size)
+        {
+            if (!Utility.IsPowerOfTwo(size))
+            {
                 throw new ArgumentException("Size {0} is not a power of 2");
-			}
-			if (!Utility.Is32Bit(size))
-			{
+            }
+            if (!Utility.Is32Bit(size))
+            {
                 throw new ArgumentException("Size {0} is not 32-bit");
-			}
+            }
 
-			minTableSize = size;
+            minTableSize = size;
             resizeInfo = default(ResizeInfo);
-			resizeInfo.status = ResizeOperationStatus.DONE;
-			resizeInfo.version = 0;
-			Initialize(resizeInfo.version, size, sector_size);
-		}
+            resizeInfo.status = ResizeOperationStatus.DONE;
+            resizeInfo.version = 0;
+            Initialize(resizeInfo.version, size, sector_size);
+        }
 
-		protected void Initialize(int version, long size, int sector_size)
-		{
+        /// <summary>
+        /// Initialize
+        /// </summary>
+        /// <param name="version"></param>
+        /// <param name="size"></param>
+        /// <param name="sector_size"></param>
+        protected void Initialize(int version, long size, int sector_size)
+        {
             long size_bytes = size * sizeof(HashBucket);
             long aligned_size_bytes = sector_size +
                 ((size_bytes + (sector_size - 1)) & ~(sector_size - 1));
 
-			//Over-allocate and align the table to the cacheline
-			state[version].size = size;
+            //Over-allocate and align the table to the cacheline
+            state[version].size = size;
             state[version].size_mask = size - 1;
             state[version].size_bits = Utility.GetLogBase2((int)size);
 
@@ -313,14 +323,15 @@ namespace FASTER.core
         /// A helper function that is used to find the slot corresponding to a
         /// key in the specified version of the hash table
         /// </summary>
-        /// <param name="key"></param>
-        /// <param name="version"></param>
+        /// <param name="hash"></param>
+        /// <param name="tag"></param>
         /// <param name="bucket"></param>
         /// <param name="slot"></param>
+        /// <param name="entry"></param>
         /// <returns>true if such a slot exists, false otherwise</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public bool FindTag(long hash, ushort tag, ref HashBucket* bucket, ref int slot, ref HashBucketEntry entry)
-		{
+        internal bool FindTag(long hash, ushort tag, ref HashBucket* bucket, ref int slot, ref HashBucketEntry entry)
+        {
             var target_entry_word = default(long);
             var entry_slot_bucket = default(HashBucket*);
             var version = resizeInfo.version;
@@ -368,8 +379,8 @@ namespace FASTER.core
 
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public void FindOrCreateTag(long hash, ushort tag, ref HashBucket* bucket, ref int slot, ref HashBucketEntry entry)
-		{
+        internal void FindOrCreateTag(long hash, ushort tag, ref HashBucket* bucket, ref int slot, ref HashBucketEntry entry)
+        {
             var version = resizeInfo.version;
             var masked_entry_word = hash & state[version].size_mask;
 
@@ -406,7 +417,7 @@ namespace FASTER.core
                     }
                 }
             }
-		}
+        }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private bool FindTagInternal(long hash, ushort tag, ref HashBucket* bucket, ref int slot)
@@ -498,6 +509,7 @@ namespace FASTER.core
         /// <param name="tag"></param>
         /// <param name="bucket"></param>
         /// <param name="slot"></param>
+        /// <param name="entry"></param>
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private bool FindTagOrFreeInternal(long hash, ushort tag, ref HashBucket* bucket, ref int slot, ref HashBucketEntry entry)
@@ -639,26 +651,57 @@ namespace FASTER.core
         }
 
 
-		/// <summary>
-		/// Helper function used to update the slot atomically with the 
-		/// new offset value using the CAS operation
-		/// </summary>
-		/// <param name="bucket"></param>
-		/// <param name="entrySlot"></param>
-		/// <param name="expected"></param>
-		/// <param name="desired"></param>
-		/// <returns>If atomic update was successful</returns>
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		internal bool UpdateSlot(HashBucket* bucket, int entrySlot, long expected, long desired, out long found)
-		{
-			found = Interlocked.CompareExchange(
-				ref bucket->bucket_entries[entrySlot], 
+        /// <summary>
+        /// Helper function used to update the slot atomically with the
+        /// new offset value using the CAS operation
+        /// </summary>
+        /// <param name="bucket"></param>
+        /// <param name="entrySlot"></param>
+        /// <param name="expected"></param>
+        /// <param name="desired"></param>
+        /// <param name="found"></param>
+        /// <returns>If atomic update was successful</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal bool UpdateSlot(HashBucket* bucket, int entrySlot, long expected, long desired, out long found)
+        {
+            found = Interlocked.CompareExchange(
+                ref bucket->bucket_entries[entrySlot],
                 desired,
-				expected);
+                expected);
 
-			return (found == expected);
-		}
+            return (found == expected);
+        }
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <returns></returns>
+        protected virtual long GetEntryCount()
+        {
+            var version = resizeInfo.version;
+            var table_size_ = state[version].size;
+            var ptable_ = state[version].tableAligned;
+            long total_entry_count = 0;
+
+            for (long bucket = 0; bucket < table_size_; ++bucket)
+            {
+                HashBucket b = *(ptable_ + bucket);
+                while (true)
+                {
+                    for (int bucket_entry = 0; bucket_entry < Constants.kOverflowBucketIndex; ++bucket_entry)
+                        if (0 != b.bucket_entries[bucket_entry])
+                            ++total_entry_count;
+                    if (b.bucket_entries[Constants.kOverflowBucketIndex] == 0) break;
+                    b = *((HashBucket*)overflowBucketsAllocator.GetPhysicalAddress((b.bucket_entries[Constants.kOverflowBucketIndex])));
+                }
+            }
+            return total_entry_count;
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="version"></param>
         protected virtual void _DumpDistribution(int version)
         {
             var table_size_ = state[version].size;
@@ -687,12 +730,12 @@ namespace FASTER.core
                     histogram[cnt]++;
             }
 
-            Console.WriteLine("number of hash buckets: {0}", table_size_);
-            Console.WriteLine("total record count: {0}", total_record_count);
-            Console.WriteLine("histogram: ");
+            Console.WriteLine("Number of hash buckets: {0}", table_size_);
+            Console.WriteLine("Total distinct hash-table entry count: {0}", total_record_count);
+            Console.WriteLine("Histogram of #entries per bucket: ");
             for (int i=0; i<14; i++)
             {
-                Console.WriteLine(i.ToString() + ": " + histogram[i].ToString());
+                Console.WriteLine(i.ToString() + ": " + histogram[i].ToString(CultureInfo.InvariantCulture));
             }
         }
 

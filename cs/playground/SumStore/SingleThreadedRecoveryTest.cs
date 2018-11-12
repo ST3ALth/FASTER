@@ -12,7 +12,7 @@ using System.Threading.Tasks;
 
 namespace SumStore
 {
-    public class SingleThreadedRecoveryTest : IFASTERRecoveryTest
+    public class SingleThreadedRecoveryTest : IFasterRecoveryTest
     {
         const long numUniqueKeys = (1 << 23);
         const long keySpace = (1L << 15);
@@ -20,15 +20,15 @@ namespace SumStore
         const long refreshInterval = (1 << 8);
         const long completePendingInterval = (1 << 12);
         const long checkpointInterval = (1 << 20);
-        ICustomFaster fht;
+        ICustomFasterKv fht;
 
         public SingleThreadedRecoveryTest()
         {
             // Create FASTER index
-            var log = FASTERFactory.CreateLogDevice(DirectoryConfiguration.GetHybridLogFileName());
-            fht = FASTERFactory.Create
-                <AdId, NumClicks, Input, Output, Empty, Functions, ICustomFaster>
-                (keySpace, log);
+            var log = FasterFactory.CreateLogDevice("logs\\hlog");
+            fht = FasterFactory.Create
+                <AdId, NumClicks, Input, Output, Empty, Functions, ICustomFasterKv>
+                (keySpace, new LogSettings { LogDevice = log }, new CheckpointSettings { CheckpointDir = "logs" });
         }
 
         public void Continue()
@@ -126,33 +126,31 @@ namespace SumStore
             fht.StopSession();
 
             // Test outputs
-            var recoveryInfo = default(HybridLogRecoveryInfo);
-            recoveryInfo.Recover(hybridLogToken);
-
-            int num_threads = recoveryInfo.numThreads;
-            DirectoryInfo info = new DirectoryInfo(DirectoryConfiguration.GetHybridLogCheckpointFolder(hybridLogToken));
-            List<ExecutionContext> cpr_points = new List<ExecutionContext>();
-            foreach (var file in info.GetFiles())
-            {
-                if (file.Name != "info.dat" && file.Name != "snapshot.dat")
-                {
-                    using (var reader = new StreamReader(file.FullName))
-                    {
-                        var ctx = new ExecutionContext();
-                        ctx.Load(reader);
-                        cpr_points.Add(ctx);
-                    }
-                }
-            }
+            var checkpointInfo = default(HybridLogRecoveryInfo);
+            checkpointInfo.Recover(hybridLogToken, "logs");
 
             // Compute expected array
             long[] expected = new long[numUniqueKeys];
-            long[] found = new long[numUniqueKeys];
-            long sno = cpr_points.First().serialNum;
-            for (long i = 0; i <= sno; i++)
+            foreach (var guid in checkpointInfo.continueTokens.Keys)
             {
-                var id = i % numUniqueKeys;
-                expected[id]++;
+                var sno = checkpointInfo.continueTokens[guid];
+                for (long i = 0; i <= sno; i++)
+                {
+                    var id = i % numUniqueKeys;
+                    expected[id]++;
+                }
+            }
+
+            int threadCount = 1; // single threaded test
+            int numCompleted = threadCount - checkpointInfo.continueTokens.Count;
+            for (int t = 0; t < numCompleted; t++)
+            {
+                var sno = numOps;
+                for (long i = 0; i < sno; i++)
+                {
+                    var id = i % numUniqueKeys;
+                    expected[id]++;
+                }
             }
 
             // Assert if expected is same as found

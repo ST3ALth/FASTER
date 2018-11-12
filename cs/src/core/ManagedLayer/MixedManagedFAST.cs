@@ -8,24 +8,40 @@ using System.Runtime.InteropServices;
 
 namespace FASTER.core
 {
+    /// <summary>
+    /// Managed FASTER class
+    /// </summary>
     [FASTER.core.Roslyn.TypeKind("user")]
-    public unsafe class MixedManagedFast
-        :
-        IManagedFAST<MixedKey, MixedValue, MixedInput, MixedOutput, MixedContext>
+    internal unsafe class MixedManagedFast
+        : IManagedFasterKV<MixedKey, MixedValue, MixedInput, MixedOutput, MixedContext>
     {
-        private IFASTER_Mixed store;
-        public long Size => store.Size;
+        private IFasterKV_Mixed store;
 
-        public MixedManagedFast(long size, IDevice logDevice, string checkpointDir, MixedUserFunctions functions, long LogTotalSizeBytes = 17179869184, double LogMutableFraction = 0.9, int LogPageSizeBits = 25)
+        /// <summary>
+        /// 
+        /// </summary>
+        public long LogTailAddress => store.LogTailAddress;
+
+        /// <summary>
+        /// 
+        /// </summary>
+        public long LogReadOnlyAddress => store.LogReadOnlyAddress;
+
+        /// <summary>
+        /// 
+        /// </summary>
+        public long EntryCount => store.EntryCount;
+
+        public MixedManagedFast(long size, MixedUserFunctions functions, 
+            LogSettings logSettings, CheckpointSettings checkpointSettings)
         {
             MixedFunctionsWrapper.userFunctions = functions;
 
-            store = HashTableManager.GetFasterHashTable
+            store = FasterFactory.Create
                 <MixedKeyWrapper, MixedValueWrapper, MixedInputWrapper,
                 MixedOutputWrapper, MixedContextWrapper, MixedFunctionsWrapper,
-                IFASTER_Mixed
-                >
-                (size, logDevice, checkpointDir, LogTotalSizeBytes, LogMutableFraction, LogPageSizeBits);
+                IFasterKV_Mixed>
+                (size, logSettings, checkpointSettings);
         }
 
         public bool CompletePending(bool wait)
@@ -33,50 +49,6 @@ namespace FASTER.core
             return store.CompletePending(wait);
         }
 
-        public Status Delete(MixedKey key, MixedContext context, long lsn)
-        {
-            MixedKeyWrapper* keyWrapper;
-            MixedContextWrapper* contextWrapper;
-#if BLIT_KEY && !GENERIC_BLIT_KEY
-                keyWrapper = (MixedKeyWrapper*)&key;
-#elif GENERIC_BLIT_KEY // implies BLIT_KEY
-            {
-                keyWrapper = (MixedKeyWrapper*)Unsafe.AsPointer(ref key);
-            }
-#else
-            {
-                var w = BlittableTypeWrapper.Create(key);
-                keyWrapper = (MixedKeyWrapper*)&w;
-            }
-#endif
-#if BLIT_CONTEXT
-            {
-            contextWrapper = (MixedContextWrapper*)&context;
-            }
-#else
-            {
-                var w = BlittableTypeWrapper.Create(context);
-                contextWrapper = (MixedContextWrapper*)w.ptr;
-            }
-#endif
-            var ret = store.Delete(keyWrapper, contextWrapper, lsn);
-
-            if (ret == Status.OK)
-            {
-#if !BLIT_KEY
-                {
-                    MixedKeyWrapper.Free(keyWrapper);
-                }
-#endif
-#if !BLIT_CONTEXT
-                {
-                    MixedContextWrapper.Free(contextWrapper);
-                }
-#endif
-            }
-
-            return ret;
-        }
 
         public void DumpDistribution()
         {
@@ -115,7 +87,7 @@ namespace FASTER.core
             {
                 keyWrapper = (MixedKeyWrapper*)&key;
             }
-#elif GENERIC_BLIT_KEY // implies BLIT_KEY
+#elif GENERIC_BLIT_KEY
             {
                 keyWrapper = (MixedKeyWrapper*)Unsafe.AsPointer(ref key);
             }
@@ -173,7 +145,7 @@ namespace FASTER.core
                 contextWrapper,
                 lsn);
 
-            if (ret == Status.OK)
+            if (ret == Status.OK || ret == Status.NOTFOUND)
             {
 
 #if !BLIT_KEY
@@ -264,7 +236,7 @@ namespace FASTER.core
                 contextWrapper,
                 lsn);
 
-            if (ret == Status.OK)
+            if (ret == Status.OK || ret == Status.NOTFOUND)
             {
 #if !BLIT_KEY
                 {
@@ -360,10 +332,51 @@ namespace FASTER.core
 
             return ret;
         }
+
+        public bool ShiftBeginAddress(long untilAddress)
+        {
+            return store.ShiftBeginAddress(untilAddress);
+        }
+
+
+        public bool TakeFullCheckpoint(out Guid token)
+        {
+            return store.TakeFullCheckpoint(out token);
+        }
+
+        public bool TakeIndexCheckpoint(out Guid token)
+        {
+            return store.TakeIndexCheckpoint(out token);
+        }
+
+        public bool TakeHybridLogCheckpoint(out Guid token)
+        {
+            return store.TakeHybridLogCheckpoint(out token);
+        }
+
+        public void Recover(Guid fullcheckpointToken)
+        {
+            store.Recover(fullcheckpointToken);
+        }
+
+        public void Recover(Guid indexToken, Guid hybridLogToken)
+        {
+            store.Recover(indexToken, hybridLogToken);
+        }
+
+        public bool CompleteCheckpoint(bool wait)
+        {
+            return store.CompleteCheckpoint(wait);
+        }
+
+        public void Dispose()
+        {
+            store.Dispose();
+        }
     }
 
     [FASTER.core.Roslyn.TypeKind("user")]
-    public unsafe static class UserType
+    internal unsafe static class UserType
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ref MixedKey Convert(MixedKeyWrapper* k)
@@ -476,6 +489,14 @@ namespace FASTER.core
 #endif
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void Initialize(MixedValueWrapper* v)
+        {
+#if BLIT_VALUE && !GENERIC_BLIT_VALUE
+#elif BLIT_VALUE && GENERIC_BLIT_VALUE
+#else
+            v->value = BlittableTypeWrapper.Create(default(MixedValue));
+#endif
+        }
     }
-
 }

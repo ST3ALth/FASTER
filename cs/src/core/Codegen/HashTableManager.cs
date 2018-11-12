@@ -8,7 +8,7 @@ using System;
 
 namespace FASTER.core
 {
-    public static class HashTableManager
+    internal static class HashTableManager
     {
         private const bool PersistDll =
 #if DEBUG
@@ -27,23 +27,25 @@ namespace FASTER.core
 #endif
             ;
         public static TIFaster GetFasterHashTable<TKey, TValue, TInput, TOutput, TContext, TFunctions, TIFaster>
-            (long size, IDevice logDevice, string checkpointDir, long LogTotalSizeBytes = 17179869184, double LogMutableFraction = 0.9, int LogPageSizeBits = 25, bool persistDll = PersistDll, bool optimizeCode = OptimizeCode)
+            (long size, IDevice logDevice, IDevice objectLogDevice, string checkpointDir, long LogTotalSizeBits, double LogMutableFraction, int LogPageSizeBits, int LogSegmentSizeBits, bool kFoldOverSnapshot, bool persistDll = PersistDll, bool optimizeCode = OptimizeCode)
         {
-            var s = Roslyn.FasterHashTableCompiler<TKey, TValue, TInput, TOutput, TContext, TFunctions, TIFaster>.GenerateFasterHashTableClass(persistDll, optimizeCode, LogTotalSizeBytes, LogMutableFraction, LogPageSizeBits);
+            var s = Roslyn.FasterHashTableCompiler<TKey, TValue, TInput, TOutput, TContext, TFunctions, TIFaster>.GenerateFasterHashTableClass(persistDll, optimizeCode, LogTotalSizeBits, LogMutableFraction, LogPageSizeBits, LogSegmentSizeBits, kFoldOverSnapshot);
             var t = s.Item1;
-            var instance = Activator.CreateInstance(t, size, logDevice, checkpointDir);
+            var instance = Activator.CreateInstance(t, size, logDevice, objectLogDevice, checkpointDir);
             return (TIFaster)instance;
         }
 
-        public static IManagedFAST<TKey, TValue, TInput, TOutput, TContext>
+        public static IManagedFasterKV<TKey, TValue, TInput, TOutput, TContext>
             GetMixedManagedFasterHashTable<TKey, TValue, TInput, TOutput, TContext, TFunctions>
-            (long size, IDevice logDevice, string checkpointDir, TFunctions functions, bool treatValueAsAtomic, long LogTotalSizeBytes = 17179869184, double LogMutableFraction = 0.9, int LogPageSizeBits = 25, bool persistDll = PersistDll, bool optimizeCode = OptimizeCode)
+            (long size, TFunctions functions, 
+            LogSettings logSettings, CheckpointSettings checkpointSettings, bool treatValueAsAtomic,
+            bool persistDll = PersistDll, bool optimizeCode = OptimizeCode)
             where TFunctions : IUserFunctions<TKey, TValue, TInput, TOutput, TContext>
         {
-            var s = Roslyn.MixedBlitManagedFasterHashTableCompiler<TKey, TValue, TInput, TOutput, TContext, TFunctions>.GenerateGenericFasterHashTableClass(size, logDevice, treatValueAsAtomic, persistDll, optimizeCode);
+            var s = Roslyn.MixedBlitManagedFasterHashTableCompiler<TKey, TValue, TInput, TOutput, TContext, TFunctions>.GenerateGenericFasterHashTableClass(treatValueAsAtomic, persistDll, optimizeCode);
             var t = s.Item1;
-            var instance = Activator.CreateInstance(t, size, logDevice, checkpointDir, functions, LogTotalSizeBytes, LogMutableFraction, LogPageSizeBits);
-            return (IManagedFAST<TKey, TValue, TInput, TOutput, TContext>)instance;
+            var instance = Activator.CreateInstance(t, size, functions, logSettings, checkpointSettings);
+            return (IManagedFasterKV<TKey, TValue, TInput, TOutput, TContext>)instance;
         }
     }
 }

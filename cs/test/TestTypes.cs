@@ -7,7 +7,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Linq;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
 using FASTER.core;
 using System.Runtime.CompilerServices;
 using System.IO;
@@ -52,16 +51,16 @@ namespace FASTER.test
 
         public static void Serialize(KeyStruct* key, Stream toStream)
         {
-            throw new NotImplementedException();
+            throw new InvalidOperationException();
         }
 
         public static void Deserialize(KeyStruct* key, Stream fromStream)
         {
-            throw new NotImplementedException();
+            throw new InvalidOperationException();
         }
         public static void Free(KeyStruct* key)
         {
-            throw new NotImplementedException();
+            throw new InvalidOperationException();
         }
         #endregion
 
@@ -113,16 +112,16 @@ namespace FASTER.test
 
         public static void Serialize(ValueStruct* key, Stream toStream)
         {
-            throw new NotImplementedException();
+            throw new InvalidOperationException();
         }
 
         public static void Deserialize(ValueStruct* key, Stream fromStream)
         {
-            throw new NotImplementedException();
+            throw new InvalidOperationException();
         }
         public static void Free(ValueStruct* key)
         {
-            throw new NotImplementedException();
+            throw new InvalidOperationException();
         }
         #endregion
 
@@ -163,11 +162,13 @@ namespace FASTER.test
         Status Read(KeyStruct* key, InputStruct* input, OutputStruct* output, Empty* context, long lsn);
         Status Upsert(KeyStruct* key, ValueStruct* value, Empty* context, long lsn);
         Status RMW(KeyStruct* key, InputStruct* input, Empty* context, long lsn);
-        Status Delete(KeyStruct* key, Empty* context, long lsn);
         bool CompletePending(bool wait);
+        bool ShiftBeginAddress(long untilAddress);
 
         /* Statistics */
-        long Size { get; }
+        long LogTailAddress { get; }
+        long LogReadOnlyAddress { get; }
+
         void DumpDistribution();
     }
     public unsafe class Functions
@@ -186,7 +187,7 @@ namespace FASTER.test
 
         public static void PersistenceCallback(long thread_id, long serial_num)
         {
-            Debug.WriteLine("Thread {0} repors persistence until {1}", thread_id, serial_num);
+            Debug.WriteLine("Thread {0} reports persistence until {1}", thread_id, serial_num);
         }
 
         // Read functions

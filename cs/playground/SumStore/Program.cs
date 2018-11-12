@@ -12,7 +12,7 @@ using System.Threading.Tasks;
 
 namespace SumStore
 {
-    public interface IFASTERRecoveryTest
+    public interface IFasterRecoveryTest
     {
         void Populate();
         void Continue();
@@ -22,8 +22,16 @@ namespace SumStore
     {
         static unsafe void Main(string[] args)
         {
+            if (args.Length == 0)
+            {
+                Console.WriteLine("Usage: SumStore.exe [single|concurrent|test] [populate|recover|continue] [guid]");
+                return;
+            }
+            if (!Directory.Exists("logs"))
+                Directory.CreateDirectory("logs");
+
             int nextArg = 0;
-            var test = default(IFASTERRecoveryTest);
+            var test = default(IFasterRecoveryTest);
             var type = args[nextArg++];
             if(type == "single")
             {

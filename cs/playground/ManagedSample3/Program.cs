@@ -113,12 +113,13 @@ namespace ManagedSample3
     {
         static void Main(string[] args)
         {
-            var log = FASTERFactory.CreateLogDevice(Path.GetTempPath() + "hybridlog.log");
-            var h = FASTERFactory.Create
+            var log = FasterFactory.CreateLogDevice(Path.GetTempPath() + "hybridlog");
+            var objlog = FasterFactory.CreateObjectLogDevice(Path.GetTempPath() + "hybridlog");
+
+            var h = FasterFactory.Create
                 <MyKey, MyValue, MyInput, MyOutput, MyContext, MyFunctions>
-                (128, log, new MyFunctions(),
-                LogPageSizeBits: 10,
-                LogTotalSizeBytes: 1L << 14
+                (128, new MyFunctions(),
+                new LogSettings {  LogDevice = log, ObjectLogDevice = objlog, MemorySizeBits = 14, PageSizeBits = 10 }
                 );
               
             h.StartSession();

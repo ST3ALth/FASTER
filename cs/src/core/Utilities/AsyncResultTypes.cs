@@ -12,16 +12,19 @@ using System.IO;
 
 namespace FASTER.core
 {
+    /// <summary>
+    /// FASTER configuration
+    /// </summary>
     public static class Config
     {
-        //public static string CheckpointDirectory = Path.GetTempPath() + "fasterlogs";
-        public static string CheckpointDirectory = "D:\\data";
+        /// <summary>
+        /// Checkpoint directory
+        /// </summary>
+        public static string CheckpointDirectory = "C:\\data";
     }
 
-    public struct AsyncGetFromDiskResult<TContext> : IAsyncResult
+    internal struct AsyncGetFromDiskResult<TContext> : IAsyncResult
     {
-        //public SectorAlignedMemory record;
-        //public SectorAlignedMemory objBuffer;
         public TContext context;
 
         public bool IsCompleted => throw new NotImplementedException();
@@ -33,30 +36,48 @@ namespace FASTER.core
         public bool CompletedSynchronously => throw new NotImplementedException();
     }
 
-    public class PageAsyncFlushResult : IAsyncResult
+    internal struct PageAsyncReadResult<TContext> : IAsyncResult
     {
         public long page;
+        public TContext context;
+        public CountdownEvent handle;
+        public SectorAlignedMemory freeBuffer1;
+        public IOCompletionCallback callback;
+        public int count;
+        public IDevice objlogDevice;
+
+        public bool IsCompleted => throw new NotImplementedException();
+
+        public WaitHandle AsyncWaitHandle => throw new NotImplementedException();
+
+        public object AsyncState => throw new NotImplementedException();
+
+        public bool CompletedSynchronously => throw new NotImplementedException();
+
+        public void Free()
+        {
+            if (freeBuffer1.buffer != null)
+                freeBuffer1.Return();
+
+            if (handle != null)
+            {
+                handle.Signal();
+            }
+        }
+    }
+
+    internal class PageAsyncFlushResult<TContext> : IAsyncResult
+    {
+        public long page;
+        public TContext context;
         public bool partial;
         public long untilAddress;
         public int count;
         public CountdownEvent handle;
-        public ISegmentedDevice objlogDevice;
+        public IDevice objlogDevice;
         public SectorAlignedMemory freeBuffer1;
         public SectorAlignedMemory freeBuffer2;
 
-        public bool IsCompleted => throw new NotImplementedException();
-
-        public WaitHandle AsyncWaitHandle => throw new NotImplementedException();
-
-        public object AsyncState => throw new NotImplementedException();
-
-        public bool CompletedSynchronously => throw new NotImplementedException();
-    }
-
-    public struct PageAsyncReadResult<TContext> : IAsyncResult
-    {
-        public long page;
-        public TContext context; 
 
         public bool IsCompleted => throw new NotImplementedException();
 
@@ -65,23 +86,22 @@ namespace FASTER.core
         public object AsyncState => throw new NotImplementedException();
 
         public bool CompletedSynchronously => throw new NotImplementedException();
+
+        public void Free()
+        {
+            if (freeBuffer1.buffer != null)
+                freeBuffer1.Return();
+            if (freeBuffer2.buffer != null)
+                freeBuffer2.Return();
+
+            if (handle != null)
+            {
+                handle.Signal();
+            }
+        }
     }
 
-    public struct PageAsyncFlushResult<TContext> : IAsyncResult
-    {
-        public long page;
-        public TContext context;
-
-        public bool IsCompleted => throw new NotImplementedException();
-
-        public WaitHandle AsyncWaitHandle => throw new NotImplementedException();
-
-        public object AsyncState => throw new NotImplementedException();
-
-        public bool CompletedSynchronously => throw new NotImplementedException();
-    }
-
-    public unsafe class HashIndexPageAsyncFlushResult : IAsyncResult
+    internal unsafe class HashIndexPageAsyncFlushResult : IAsyncResult
     {
         public HashBucket* start;
         public int numChunks;
@@ -89,7 +109,6 @@ namespace FASTER.core
         public int numFinished;
         public uint chunkSize;
         public IDevice device;
-        public Stopwatch sw;
 
         public bool IsCompleted => throw new NotImplementedException();
 
@@ -100,7 +119,7 @@ namespace FASTER.core
 		public bool CompletedSynchronously => throw new NotImplementedException();
 	}
 
-    public struct HashIndexPageAsyncReadResult : IAsyncResult
+    internal struct HashIndexPageAsyncReadResult : IAsyncResult
     {
         public int chunkIndex;
 
@@ -113,7 +132,7 @@ namespace FASTER.core
         public bool CompletedSynchronously => throw new NotImplementedException();
     }
 
-    public struct OverflowPagesFlushAsyncResult : IAsyncResult
+    internal struct OverflowPagesFlushAsyncResult : IAsyncResult
     {
         public bool IsCompleted => throw new NotImplementedException();
 
@@ -124,7 +143,7 @@ namespace FASTER.core
         public bool CompletedSynchronously => throw new NotImplementedException();
     }
 
-    public struct OverflowPagesReadAsyncResult : IAsyncResult
+    internal struct OverflowPagesReadAsyncResult : IAsyncResult
     {
 
         public bool IsCompleted => throw new NotImplementedException();
@@ -136,7 +155,7 @@ namespace FASTER.core
         public bool CompletedSynchronously => throw new NotImplementedException();
     }
 
-    public struct CountdownEventAsyncResult : IAsyncResult
+    internal struct CountdownEventAsyncResult : IAsyncResult
     {
         public CountdownEvent countdown;
         public Action action;

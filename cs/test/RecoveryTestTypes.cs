@@ -7,7 +7,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Linq;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
 using FASTER.core;
 using System.Runtime.CompilerServices;
 using System.IO;
@@ -53,16 +52,16 @@ namespace FASTER.test.recovery.sumstore
 
         public static void Serialize(AdId* key, Stream toStream)
         {
-            throw new NotImplementedException();
+            throw new InvalidOperationException();
         }
 
         public static void Deserialize(AdId* key, Stream fromStream)
         {
-            throw new NotImplementedException();
+            throw new InvalidOperationException();
         }
         public static void Free(AdId* key)
         {
-            throw new NotImplementedException();
+            throw new InvalidOperationException();
         }
         #endregion
     }
@@ -125,16 +124,16 @@ namespace FASTER.test.recovery.sumstore
 
         public static void Serialize(NumClicks* key, Stream toStream)
         {
-            throw new NotImplementedException();
+            throw new InvalidOperationException();
         }
 
         public static void Deserialize(NumClicks* key, Stream fromStream)
         {
-            throw new NotImplementedException();
+            throw new InvalidOperationException();
         }
         public static void Free(NumClicks* key)
         {
-            throw new NotImplementedException();
+            throw new InvalidOperationException();
         }
         #endregion
     }
@@ -162,16 +161,18 @@ namespace FASTER.test.recovery.sumstore
         bool TakeHybridLogCheckpoint(out Guid token);
         void Recover(Guid fullcheckpointToken);
         void Recover(Guid indexToken, Guid hybridLogToken);
+        bool CompleteCheckpoint(bool wait);
 
         /* Store Interface */
         Status Read(AdId* key, Input* input, Output* output, Empty* context, long lsn);
         Status Upsert(AdId* key, NumClicks* value, Empty* context, long lsn);
         Status RMW(AdId* key, Input* input, Empty* context, long lsn);
-        Status Delete(AdId* key, Empty* context, long lsn);
         bool CompletePending(bool wait);
+        bool ShiftBeginAddress(long untilAddress);
 
         /* Statistics */
-        long Size { get; }
+        long LogTailAddress { get; }
+        long LogReadOnlyAddress { get; }
         void DumpDistribution();
     }
 
